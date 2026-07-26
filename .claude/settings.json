@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(date:*)",
+      "WebSearch",
+      "Write(output/**)"
+    ],
+    "deny": []
+  }
+}

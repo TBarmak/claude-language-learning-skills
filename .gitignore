@@ -1,0 +1,9 @@
+output/
+*.csv
+
+.claude/settings.local.json
+temp-*.json
+
+.DS_Store
+.vscode/
+.idea/
