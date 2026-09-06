@@ -2,8 +2,12 @@ output/
 *.csv
 
 .claude/settings.local.json
+.claude/skills/anki-phrases/.venv/
 temp-*.json
 
 .DS_Store
 .vscode/
 .idea/
+
+# Input files
+*.txt

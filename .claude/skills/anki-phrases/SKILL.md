@@ -1,6 +1,6 @@
 ---
 name: anki-phrases
-description: This skill should be used when the user asks to "generate Anki phrase cards", "create phrase flashcards", "build an Anki phrases CSV", "explain foreign expressions", or provides a file of foreign language expressions to study. Produces a CSV with monolingual explanations and example sentences. Different from anki-cards: no audio/images, AI-generated content only.
+description: This skill should be used when the user asks to "generate Anki phrase cards", "create phrase flashcards", "build an Anki phrases CSV", "explain foreign expressions", or provides a file of foreign language expressions to study. Produces a CSV with monolingual explanations, example sentences, and a pronunciation audio file per phrase (Forvo human recording, falling back to neural TTS).
 argument-hint: <expression-list-file>
 ---
 
@@ -142,16 +142,77 @@ Use the Write tool to write the complete CSV file in a single operation. All row
 
 Do not use Bash for this step. The Write tool handles the file directly with no permission prompts.
 
-## Step 7 — Report results
+## Step 7 — Generate pronunciation audio
+
+Add one pronunciation audio file per phrase. The helper script `gen_audio.py`
+(in this skill's directory) tries sources in order per phrase and stops at the
+first that works: **Forvo** (real human recording) → **Piper** (neural TTS) →
+macOS **`say`**. Every clip is normalized to mp3.
+
+**7a — Map the detected language to a code.** The script takes a `--lang` code,
+not the display name. Pick from:
+
+| Detected language                     | `--lang` |
+|---------------------------------------|----------|
+| Spanish (any region)                  | `es`     |
+| French                                | `fr`     |
+| Italian                               | `it`     |
+| German                                | `de`     |
+| Brazilian Portuguese                  | `pt-br`  |
+| European Portuguese                   | `pt-pt`  |
+| English                               | `en`     |
+| Japanese                              | `ja`     |
+| Mandarin Chinese                      | `zh`     |
+
+Forvo covers all of these. Piper neural voices exist only for es/fr/it/de/pt-br/en;
+other languages fall back to macOS `say` when Forvo has no recording.
+
+**7b — Ensure the audio venv (idempotent).** Forvo scraping needs `curl_cffi` +
+`beautifulsoup4` in a skill-local venv. Run once (safe to re-run):
+
+```bash
+VENV=.claude/skills/anki-phrases/.venv
+[ -d "$VENV" ] || python3 -m venv "$VENV"
+"$VENV/bin/pip" install -q --disable-pip-version-check curl_cffi beautifulsoup4
+```
+
+**7c — Run the generator** on the CSV from Step 6. It appends a 4th column
+`[sound:...]` to every row and writes the mp3s into `output/{csv_stem}/`:
+
+```bash
+.claude/skills/anki-phrases/.venv/bin/python \
+  .claude/skills/anki-phrases/gen_audio.py \
+  --csv output/{language_lowercase}_phrases_{timestamp}.csv \
+  --lang {code}
+```
+
+The script prints per-phrase progress (`✓ forvo` / `✓ piper` / `✓ say` / `✗ no
+audio`) and a summary of how many came from each source. It is idempotent:
+existing mp3s are reused, and re-running never duplicates the audio column.
+
+Piper (the AI fallback) is reused from the local `ai-language-tutor` checkout at
+`/Users/taylor/Development/ai-language-tutor`. If that path moves, point the
+`PIPER_PYTHON` and `PIPER_VOICES` env vars at the new location. If Piper is
+unavailable, the script still falls back to macOS `say`. Pass `--no-forvo` to
+skip Forvo and go straight to TTS (useful for testing or offline).
+
+The final CSV has 4 columns: `expression | explanation | examples | audio`.
+
+## Step 8 — Report results
 
 Print a summary:
 
 ```
 ✓ Arquivo gerado: output/{language_lowercase}_phrases_{timestamp}.csv
+  Áudio: output/{csv_stem}/  ({forvo_count} Forvo, {tts_count} TTS, {audio_failed} sem áudio)
   Expressões processadas: {total}
   Buscas web realizadas: {web_search_count}
   Não encontradas: {not_found_count}
 ```
+
+Tell the user how to import: open Anki, drag every mp3 from `output/{csv_stem}/`
+into the collection's media folder (or import the CSV with Anki's media handling),
+then import the CSV. The `[sound:...]` field plays the audio on the card.
 
 (Print the summary in the detected language or in English if the detected language is not easily writable in the terminal.)
 
