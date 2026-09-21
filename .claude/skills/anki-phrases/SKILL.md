@@ -176,8 +176,9 @@ VENV=.claude/skills/anki-phrases/.venv
 "$VENV/bin/pip" install -q --disable-pip-version-check curl_cffi beautifulsoup4
 ```
 
-**7c — Run the generator** on the CSV from Step 6. It appends a 4th column
-`[sound:...]` to every row and writes the mp3s into `output/{csv_stem}/`:
+**7c — Run the generator** on the CSV from Step 6. For every row it embeds a
+`[sound:...]` tag into the explanation field, right below the description (so it
+renders on the back of the card), and writes the mp3s into `output/{csv_stem}/`:
 
 ```bash
 .claude/skills/anki-phrases/.venv/bin/python \
@@ -188,7 +189,7 @@ VENV=.claude/skills/anki-phrases/.venv
 
 The script prints per-phrase progress (`✓ forvo` / `✓ piper` / `✓ say` / `✗ no
 audio`) and a summary of how many came from each source. It is idempotent:
-existing mp3s are reused, and re-running never duplicates the audio column.
+existing mp3s are reused, and re-running never duplicates the audio tag.
 
 Piper (the AI fallback) is reused from the local `ai-language-tutor` checkout at
 `/Users/taylor/Development/ai-language-tutor`. If that path moves, point the
@@ -196,7 +197,9 @@ Piper (the AI fallback) is reused from the local `ai-language-tutor` checkout at
 unavailable, the script still falls back to macOS `say`. Pass `--no-forvo` to
 skip Forvo and go straight to TTS (useful for testing or offline).
 
-The final CSV has 4 columns: `expression | explanation | examples | audio`.
+The CSV stays 3 columns: `expression | explanation | examples`. The audio tag
+lives inside the explanation field (below the description), so it imports as part
+of the back of the card with no extra column to map.
 
 ## Step 8 — Report results
 
@@ -212,7 +215,8 @@ Print a summary:
 
 Tell the user how to import: open Anki, drag every mp3 from `output/{csv_stem}/`
 into the collection's media folder (or import the CSV with Anki's media handling),
-then import the CSV. The `[sound:...]` field plays the audio on the card.
+then import the CSV. The `[sound:...]` tag sits in the explanation field, below
+the description, so it plays on the back of the card.
 
 (Print the summary in the detected language or in English if the detected language is not easily writable in the terminal.)
 

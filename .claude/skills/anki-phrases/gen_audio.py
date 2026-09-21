@@ -6,8 +6,9 @@ Per expression, try sources in order and stop at the first that works:
   2. Piper   — neural TTS (reuses ai-language-tutor's venv + .onnx voices)
   3. macOS `say` — system voice, last-resort fallback
 
-Every clip is normalized to mp3 via ffmpeg and written to <audio-dir>. Each CSV
-row gets an appended field: [sound:pronunciation_<lang>_<slug>.mp3]. Drop the
+Every clip is normalized to mp3 via ffmpeg and written to <audio-dir>. The tag
+[sound:pronunciation_<lang>_<slug>.mp3] is embedded into the explanation field
+(right below the description) so it renders on the back of the card. Drop the
 mp3s into Anki's media folder and import the CSV.
 
 Usage:
@@ -73,6 +74,16 @@ def slug(word):
     norm = norm.lower()
     norm = re.sub(r"[^a-z0-9]+", "_", norm).strip("_")
     return norm or "phrase"
+
+
+def embed_audio(row, tag):
+    """Insert the sound tag below the explanation (2nd field) so it renders on
+    the back of the card. Falls back to appending if the row is malformed."""
+    fields = row.split("|")
+    if len(fields) >= 2:
+        fields[1] = f"{fields[1]}<br>{tag}"
+        return "|".join(fields)
+    return f"{row}<br>{tag}"
 
 
 def to_mp3(src, dst):
@@ -229,8 +240,11 @@ def main():
     stats = {"forvo": 0, "piper": 0, "say": 0, "failed": 0, "cached": 0}
     out_rows = []
     for i, row in enumerate(rows, 1):
-        # drop a trailing audio field from a previous run so reruns don't stack columns
+        # strip audio from a previous run so reruns don't stack tags — handles
+        # both the old trailing-column form (|[sound:...] or a bare |) and the
+        # current embedded-in-explanation form (<br>[sound:...])
         row = re.sub(r"\|(\[sound:[^\]]*\])?$", "", row)
+        row = re.sub(r"<br>\[sound:[^\]]*\]", "", row)
         expr = row.split("|", 1)[0].strip()
         fname = f"pronunciation_{cfg['forvo']}_{slug(expr)}.mp3"
         dst = os.path.join(audio_dir, fname)
@@ -239,7 +253,7 @@ def main():
         if not args.force and os.path.exists(dst) and os.path.getsize(dst) > 0:
             stats["cached"] += 1
             print(f"[{i}/{len(rows)}] {expr}  ✓ cached")
-            out_rows.append(f"{row}|{tag}")
+            out_rows.append(embed_audio(row, tag))
             continue
 
         source = None
@@ -253,11 +267,11 @@ def main():
         if source:
             stats[source] += 1
             print(f"[{i}/{len(rows)}] {expr}  ✓ {source}")
-            out_rows.append(f"{row}|{tag}")
+            out_rows.append(embed_audio(row, tag))
         else:
             stats["failed"] += 1
             print(f"[{i}/{len(rows)}] {expr}  ✗ no audio")
-            out_rows.append(f"{row}|")  # keep column count stable
+            out_rows.append(row)  # no tag; row keeps its 3 columns
 
     with open(args.csv, "w", encoding="utf-8") as fh:
         fh.write("\n".join(out_rows))
